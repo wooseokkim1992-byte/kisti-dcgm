@@ -53,3 +53,13 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+#csv and txt files
+*.txt
+*.csv
+
+soft_max
+#vscode file
+.vscode/c_cpp_properties.json
+.vscode/
+

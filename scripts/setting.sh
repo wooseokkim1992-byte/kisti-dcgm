@@ -1,8 +1,7 @@
 #!/bin/bash
 
-set -e 
+set -ex
 
-WHICH_COND=$(which conda)
 CONDA_ENV_NAME=new_conda_env
 PIP_VERSION=26.0.1
 
@@ -29,13 +28,21 @@ echo "Python version OK: $VERSION"
 
 if ! command -v conda &> /dev/null; then
     echo "conda is not installed or not in PATH"
-    exit 1
+    if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+        source "$HOME/miniconda3/etc/profile.d/conda.sh"
+    elif [[ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]]; then
+        source "$HOME/anaconda3/etc/profile.d/conda.sh"
+    else
+        echo "conda not found"
+        exit 1
+    fi
+else
+    source "$(conda info --base)/etc/profile.d/conda.sh"
 fi
 
 echo "✅ conda found"
 
 echo "initializing conda"
-source "$(conda info --base)/etc/profile.d/conda.sh"
 
 if conda env list | awk '{print $1}' | grep -qx "$CONDA_ENV_NAME"; then
     echo ">>> Environment already exists: $CONDA_ENV_NAME"

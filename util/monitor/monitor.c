@@ -65,8 +65,8 @@ typedef struct {
     // =========================
     // PCIe
     // =========================
-    long long pcie_tx[MAX_FIELDS];
-    long long pcie_rx[MAX_FIELDS];
+    long long pcie_tx_throughput[MAX_FIELDS];
+    long long pcie_rx_throughput[MAX_FIELDS];
     long long pcie_replay[MAX_FIELDS];
 
     // =========================
@@ -90,11 +90,16 @@ typedef struct {
     // =========================
     double sm_active[MAX_FIELDS];
     double sm_occupancy[MAX_FIELDS];
-    double dram_active[MAX_FIELDS];
-    double fp32_active[MAX_FIELDS];
-    double fp64_active[MAX_FIELDS];
     double tensor_active[MAX_FIELDS];
+    double fp64_active[MAX_FIELDS];
+    double fp32_active[MAX_FIELDS];
+    double fp16_active[MAX_FIELDS];
+    double dram_active[MAX_FIELDS];
+    double pcie_tx[MAX_FIELDS];
+    double pcie_rx[MAX_FIELDS];
     double gr_engine_active[MAX_FIELDS];
+    double nvlink_tx_bytes[MAX_FIELDS];
+    double nvlink_rx_bytes[MAX_FIELDS];
 
 } monitor_ctx_t;
 
@@ -116,26 +121,433 @@ void disconnect_fn(dcgmHandle_t *handle,dcgmFieldGrp_t *field_group_id,dcgmGpuGr
         free(*c);
         *c=NULL;
     }
-    if(handle){
-        dcgmFieldGroupDestroy(*handle, *field_group_id);
-        dcgmGroupDestroy(*handle, *group_id);
+    if(handle&&*handle){
+        if(*field_group_id&&field_group_id){
+            dcgmFieldGroupDestroy(*handle, *field_group_id);
+            *field_group_id=0;
+        }
+        if(*group_id&&group_id){
+            dcgmGroupDestroy(*handle, *group_id);
+            *group_id=0;
+        }
         dcgmDisconnect(*handle);
         dcgmShutdown();
+        *handle=0;
     }
 }
 
 unsigned short check_dcgm_status(dcgmFieldValue_v1 values){
+    if(values.status==DCGM_ST_NO_DATA){
+        printf("dcgm no data\n");
+        return 1;
+    }
     if(values.status==DCGM_ST_NO_DATA||values.status!=DCGM_ST_OK)return 1;
     return 0;
 }
 
-FILE* initialize_file(const char *csv_path){
+void fprintf_by_mode(const unsigned short mode,monitor_ctx_t *ctx,const short active_gpu_count){
+    
+    if(mode==1){
+        for(int i=0;i<active_gpu_count;i++){
+            fprintf(ctx->fp,
+                "%u,%ld,"            // entityId, timestamp
+
+                // Power
+                "%.2f,%.2f,%lld,"
+
+                // Thermal
+                "%lld,%lld,%lld,%lld,"
+
+                // Clock
+                "%lld,%lld,%lld,%lld,%lld,%lld,"
+
+                // Utilization
+                "%lld,%lld,%lld,%lld,"
+
+                // Memory
+                "%lld,%lld,%lld,"
+
+                // PCIe
+                "%lld,%lld,%lld,"
+
+                // Reliability
+                "%lld,%lld,"
+
+                // Violations
+                "%lld,%lld,%lld,%lld,%lld,%lld,"
+
+                // Profiling
+                "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+
+                ctx->entityId[i],
+                ctx->timestamp[i],
+
+                // Power
+                ctx->power[i],
+                ctx->gpu_power_limit[i],
+                ctx->total_energy[i],
+
+                // Thermal
+                ctx->gpu_temp[i],
+                ctx->memory_temp[i],
+                ctx->slowdown_temp[i],
+                ctx->shutdown_temp[i],
+
+                // Clock
+                ctx->sm_clock[i],
+                ctx->mem_clock[i],
+                ctx->app_sm_clock[i],
+                ctx->app_mem_clock[i],
+                ctx->max_sm_clock[i],
+                ctx->max_mem_clock[i],
+                // Utilization
+                ctx->gpu_util[i],
+                ctx->mem_copy_util[i],
+                ctx->enc_util[i],
+                ctx->dec_util[i],
+
+                // Memory
+                ctx->fb_used[i],
+                ctx->fb_free[i],
+                ctx->fb_total[i],
+
+                // PCIe
+                ctx->pcie_tx_throughput[i],
+                ctx->pcie_rx_throughput[i],
+                ctx->pcie_replay[i],
+
+                // Reliability
+                ctx->ecc_sbe[i],
+                ctx->ecc_dbe[i],
+
+                // Violations
+                ctx->power_violation[i],
+                ctx->thermal_violation[i],
+                ctx->sync_boost_violation[i],
+                ctx->board_limit_violation[i],
+                ctx->low_util_violation[i],
+                ctx->reliability_violation[i],
+
+                // Profiling
+                ctx->sm_active[i],
+                ctx->sm_occupancy[i],
+                ctx->dram_active[i],
+                ctx->pcie_tx[i],
+                ctx->pcie_rx[i],
+                ctx->gr_engine_active[i],
+                 ctx->nvlink_tx_bytes[i],
+                  ctx->nvlink_rx_bytes[i]
+            );
+        }
+    }else if(mode==2){
+        for(int i=0;i<active_gpu_count;i++){
+            fprintf(ctx->fp,
+                "%u,%ld,"            // entityId, timestamp
+
+                // Power
+                "%.2f,%.2f,%lld,"
+
+                // Thermal
+                "%lld,%lld,%lld,%lld,"
+
+                // Clock
+                "%lld,%lld,%lld,%lld,%lld,%lld,"
+
+                // Utilization
+                "%lld,%lld,%lld,%lld,"
+
+                // Memory
+                "%lld,%lld,%lld,"
+
+                // PCIe
+                "%lld,%lld,%lld,"
+
+                // Reliability
+                "%lld,%lld,"
+
+                // Violations
+                "%lld,%lld,%lld,%lld,%lld,%lld,"
+
+                // Profiling
+                "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+
+                ctx->entityId[i],
+                ctx->timestamp[i],
+
+                // Power
+                ctx->power[i],
+                ctx->gpu_power_limit[i],
+                ctx->total_energy[i],
+
+                // Thermal
+                ctx->gpu_temp[i],
+                ctx->memory_temp[i],
+                ctx->slowdown_temp[i],
+                ctx->shutdown_temp[i],
+
+                // Clock
+                ctx->sm_clock[i],
+                ctx->mem_clock[i],
+                ctx->app_sm_clock[i],
+                ctx->app_mem_clock[i],
+                ctx->max_sm_clock[i],
+                ctx->max_mem_clock[i],
+                // Utilization
+                ctx->gpu_util[i],
+                ctx->mem_copy_util[i],
+                ctx->enc_util[i],
+                ctx->dec_util[i],
+
+                // Memory
+                ctx->fb_used[i],
+                ctx->fb_free[i],
+                ctx->fb_total[i],
+
+                // PCIe
+                ctx->pcie_tx_throughput[i],
+                ctx->pcie_rx_throughput[i],
+                ctx->pcie_replay[i],
+
+                // Reliability
+                ctx->ecc_sbe[i],
+                ctx->ecc_dbe[i],
+
+                // Violations
+                ctx->power_violation[i],
+                ctx->thermal_violation[i],
+                ctx->sync_boost_violation[i],
+                ctx->board_limit_violation[i],
+                ctx->low_util_violation[i],
+                ctx->reliability_violation[i],
+
+                // Profiling
+                ctx->tensor_active[i],
+                ctx->dram_active[i],
+                ctx->pcie_tx[i],
+                ctx->pcie_rx[i],
+                ctx->gr_engine_active[i],
+                ctx->nvlink_tx_bytes[i],
+                ctx->nvlink_rx_bytes[i]
+            );
+        }
+    }else if(mode==3){
+        for(int i=0;i<active_gpu_count;i++){
+            fprintf(ctx->fp,
+                "%u,%ld,"            // entityId, timestamp
+
+                // Power
+                "%.2f,%.2f,%lld,"
+
+                // Thermal
+                "%lld,%lld,%lld,%lld,"
+
+                // Clock
+                "%lld,%lld,%lld,%lld,%lld,%lld,"
+
+                // Utilization
+                "%lld,%lld,%lld,%lld,"
+
+                // Memory
+                "%lld,%lld,%lld,"
+
+                // PCIe
+                "%lld,%lld,%lld,"
+
+                // Reliability
+                "%lld,%lld,"
+
+                // Violations
+                "%lld,%lld,%lld,%lld,%lld,%lld,"
+
+                // Profiling
+                "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+
+                ctx->entityId[i],
+                ctx->timestamp[i],
+
+                // Power
+                ctx->power[i],
+                ctx->gpu_power_limit[i],
+                ctx->total_energy[i],
+
+                // Thermal
+                ctx->gpu_temp[i],
+                ctx->memory_temp[i],
+                ctx->slowdown_temp[i],
+                ctx->shutdown_temp[i],
+
+                // Clock
+                ctx->sm_clock[i],
+                ctx->mem_clock[i],
+                ctx->app_sm_clock[i],
+                ctx->app_mem_clock[i],
+                ctx->max_sm_clock[i],
+                ctx->max_mem_clock[i],
+                // Utilization
+                ctx->gpu_util[i],
+                ctx->mem_copy_util[i],
+                ctx->enc_util[i],
+                ctx->dec_util[i],
+
+                // Memory
+                ctx->fb_used[i],
+                ctx->fb_free[i],
+                ctx->fb_total[i],
+
+                // PCIe
+                ctx->pcie_tx_throughput[i],
+                ctx->pcie_rx_throughput[i],
+                ctx->pcie_replay[i],
+
+                // Reliability
+                ctx->ecc_sbe[i],
+                ctx->ecc_dbe[i],
+
+                // Violations
+                ctx->power_violation[i],
+                ctx->thermal_violation[i],
+                ctx->sync_boost_violation[i],
+                ctx->board_limit_violation[i],
+                ctx->low_util_violation[i],
+                ctx->reliability_violation[i],
+
+                // Profiling
+                ctx->fp32_active[i],
+                ctx->dram_active[i],
+                ctx->pcie_tx[i],
+                ctx->pcie_rx[i],
+                ctx->gr_engine_active[i],
+                ctx->nvlink_tx_bytes[i],
+                ctx->nvlink_rx_bytes[i]
+            );
+        }
+    }
+}
+
+char** set_field_names(const unsigned short mode, const char* basic_field_names[],size_t basic_size,size_t* final_field_size){
+    size_t additional_size=0;
+    size_t basic_field_size = basic_size;
+    char **final_field_names=NULL;
+    char **additional_field_names=NULL;
+    if(mode==1){
+        static const char*field_names_mode1[]={
+            // Profiling
+            // Group A SubGroup 1
+            "SM_Active(%)",
+            "SM_Occupancy(%)",
+            // Group B SubGroup 0
+            "DRAM_Active(%)",
+            // Group C SubGroup 0
+            "PCIe_TX(MB)",
+            "PCIe_RX(MB)",
+            // Group D SubGroup 0
+            "GR_Engine_Active(%)",
+            // Group E SubGroup 0
+            "NVLink_TX(MB)",
+            "NVLink_RX(MB)"
+        };
+        additional_field_names=(char **)field_names_mode1;
+        additional_size=sizeof(field_names_mode1)/sizeof(field_names_mode1[0]);
+    }else if(mode==2){
+        static const char *field_names_mode2[] = {
+            "Tensor_Active(%)",
+            "DRAM_Active(%)",
+            "GR_Engine_Active(%)",
+            "PCIe_TX(Bytes)",
+            "PCIe_RX(Bytes)",
+            "NVLink_TX(Bytes)",
+            "NVLink_RX(Bytes)"
+        };
+        additional_field_names=(char **)field_names_mode2;
+        additional_size=sizeof(field_names_mode2)/sizeof(field_names_mode2[0]);
+    }else if(mode==3){
+        static const char *field_names[] = {
+            "FP32_Active(%)",
+            "DRAM_Active(%)",
+            "GR_Engine_Active(%)",
+            "PCIe_TX(Bytes)",
+            "PCIe_RX(Bytes)",
+            "NVLink_TX(Bytes)",
+            "NVLink_RX(Bytes)"
+        };
+        additional_field_names=(char **)field_names;
+        additional_size=sizeof(field_names)/sizeof(field_names[0]);
+    }else{
+        return NULL;
+    }
+    *final_field_size = basic_field_size+additional_size;
+    final_field_names = malloc((*final_field_size)*sizeof(char*));
+    if(final_field_names==NULL)return NULL;
+    memcpy(final_field_names,basic_field_names,basic_field_size*sizeof(char*));
+    memcpy(final_field_names+basic_field_size,additional_field_names,additional_size*sizeof(char*));
+
+    return final_field_names;
+}
+
+unsigned short* set_field_ids(unsigned short mode,unsigned short*basic_field_ids,size_t count,int *final_count){
+    unsigned short *field_ids;
+    unsigned short *new_field_ids=NULL;
+    size_t basic_count = count;
+    size_t additional_count = 0;
+    if(mode==1){
+        static unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_SM_ACTIVE,
+            DCGM_FI_PROF_SM_OCCUPANCY,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=additional_field_ids;
+    }else if(mode==2){
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode ==3){
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else{
+        return NULL;
+    }
+    size_t total = basic_count+additional_count;
+    *final_count=total;
+    field_ids=malloc(sizeof(unsigned short)*total);
+    if(field_ids==NULL){
+        return NULL;
+    }
+    memcpy(field_ids,basic_field_ids,basic_count*sizeof(unsigned short));
+    memcpy(field_ids+basic_count,new_field_ids,additional_count*sizeof(unsigned short));
+    return field_ids;
+}
+
+FILE* initialize_file(const char *csv_path,const unsigned short mode){
     FILE *fp = fopen(csv_path,"w");
     if(!fp){
         perror("failed open file");
         return NULL;
     }
-    const char *field_names[] = {
+    const char *basic_field_names[] = {
         // Power
         "Power(W)",
         "Power_Limit(W)",
@@ -182,25 +594,20 @@ FILE* initialize_file(const char *csv_path){
         "Board_Limit_Violation",
         "Low_Util_Violation",
         "Reliability_Violation",
-
-        // Profiling
-        "SM_Active(%)",
-        "SM_Occupancy(%)",
-        "DRAM_Active(%)",
-        "FP32_Active(%)",
-        "FP64_Active(%)",
-        "Tensor_Active(%)",
-        "GR_Engine_Active(%)"
     };
+    size_t basic_size = sizeof(basic_field_names)/sizeof(basic_field_names[0]);
+    size_t final_field_size = 0;
+    const char**field_names=(const char**)set_field_names(mode,basic_field_names,basic_size,&final_field_size);
+
     fprintf(fp,"GPU ID,");
     fprintf(fp,"Time Stamp(micro second),");
-    const int arr_size = sizeof(field_names)/sizeof(field_names[0]);
-    for(int i=0;i<arr_size;i++){
+    for(int i=0;i<final_field_size;i++){
         fprintf(fp,"%s",field_names[i]);
-        if(i!=arr_size-1){
+        if(i!=final_field_size-1){
             fprintf(fp,",");
         }
     }
+    free(field_names);
     fprintf(fp,"\n");
     fflush(fp);
     return fp;
@@ -307,25 +714,25 @@ int collect_callback(dcgm_field_entity_group_t entityGroupId,
             // =========================
             case DCGM_FI_DEV_PCIE_TX_THROUGHPUT:
                 if(values[i].fieldType==105&&values[i].value.i64<1e12&&values[i].value.i64>=0){
-                    ctx->pcie_tx[entityId] = values[i].value.i64;
+                    ctx->pcie_tx_throughput[entityId] = values[i].value.i64;
                 }else{
-                    ctx->pcie_tx[entityId]=0;
+                    ctx->pcie_tx_throughput[entityId]=0;
                 }
                 break;
 
             case DCGM_FI_DEV_PCIE_RX_THROUGHPUT:
                 if(values[i].fieldType==105&&values[i].value.i64<1e12&&values[i].value.i64>=0){
-                    ctx->pcie_tx[entityId] = values[i].value.i64;
+                    ctx->pcie_rx_throughput[entityId] = values[i].value.i64;
                 }else{
-                    ctx->pcie_tx[entityId]=0;
+                    ctx->pcie_rx_throughput[entityId]=0;
                 }
                 break;
 
             case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
                 if(values[i].fieldType==105&&values[i].value.i64<1e12&&values[i].value.i64>=0){
-                    ctx->pcie_tx[entityId] = values[i].value.i64;
+                    ctx->pcie_replay[entityId] = values[i].value.i64;
                 }else{
-                    ctx->pcie_tx[entityId]=0;
+                    ctx->pcie_replay[entityId]=0;
                 }
                 break;
 
@@ -378,20 +785,12 @@ int collect_callback(dcgm_field_entity_group_t entityGroupId,
                 }else{
                     ctx->sm_occupancy[entityId] = 0.0;
                 }
-
                 break;
-            case DCGM_FI_PROF_DRAM_ACTIVE:
+            case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
                 if(check_dcgm_status(values[i])==0){
-                    ctx->dram_active[entityId] = values[i].value.dbl*100;
+                    ctx->tensor_active[entityId] = values[i].value.dbl*100;
                 }else{
-                    ctx->sm_occupancy[entityId] = 0.0;
-                }
-                break;
-            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-                if(check_dcgm_status(values[i])==0){
-                    ctx->fp32_active[entityId] = values[i].value.dbl*100;
-                }else{
-                    ctx->fp32_active[entityId] = 0.0;
+                    ctx->tensor_active[entityId] = 0.0;
                 }
                 break;
             case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
@@ -401,15 +800,56 @@ int collect_callback(dcgm_field_entity_group_t entityGroupId,
                     ctx->fp64_active[entityId] = 0.0;
                 }
                 break;
-
-            case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
                 if(check_dcgm_status(values[i])==0){
-                    ctx->tensor_active[entityId] = values[i].value.dbl*100;
+                    ctx->fp32_active[entityId] = values[i].value.dbl*100;
                 }else{
-                    ctx->tensor_active[entityId] = 0.0;
+                    ctx->fp32_active[entityId] = 0.0;
+                }
+                break;
+            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+                if(check_dcgm_status(values[i])==0){
+                    ctx->fp16_active[entityId] = values[i].value.dbl*100;
+                }else{
+                    ctx->fp16_active[entityId] = 0.0;
+                }
+                break;
+            case DCGM_FI_PROF_DRAM_ACTIVE:
+                if(check_dcgm_status(values[i])==0){
+                    ctx->dram_active[entityId] = values[i].value.dbl*100;
+                }else{
+                    ctx->dram_active[entityId] = 0.0;
+                }
+                break;
+            case DCGM_FI_PROF_PCIE_TX_BYTES:
+                if(check_dcgm_status(values[i])==0){
+                    ctx->pcie_tx[entityId] = (double)values[i].value.i64/(1024*1024);
+                }else{
+                    ctx->pcie_tx[entityId] = 0.0;
+                }
+                break;
+            case DCGM_FI_PROF_PCIE_RX_BYTES:
+                if(check_dcgm_status(values[i])==0){
+                    ctx->pcie_rx[entityId] = (double)values[i].value.i64/(1024*1024);
+                }else{
+                    ctx->pcie_rx[entityId] = 0.0;
                 }
                 break;
 
+            case DCGM_FI_PROF_NVLINK_TX_BYTES:
+                if(check_dcgm_status(values[i])==0){
+                    ctx->nvlink_tx_bytes[entityId] = (double)values[i].value.i64/(1024*1024);
+                }else{
+                    ctx->nvlink_tx_bytes[entityId] = 0.0;
+                }
+                break;
+            case DCGM_FI_PROF_NVLINK_RX_BYTES:
+                if(check_dcgm_status(values[i])==0){
+                    ctx->nvlink_rx_bytes[entityId] = (double)values[i].value.i64/(1024*1024);
+                }else{
+                    ctx->nvlink_rx_bytes[entityId] = 0.0;
+                }
+                break;
             case DCGM_FI_PROF_GR_ENGINE_ACTIVE:
                 if(check_dcgm_status(values[i])==0){
                     ctx->gr_engine_active[entityId] = values[i].value.dbl*100;
@@ -423,7 +863,7 @@ int collect_callback(dcgm_field_entity_group_t entityGroupId,
     return 0;
 }
 
-void start_monitoring(const char *csv_path){
+void start_monitoring(const char *csv_path,const unsigned short mode){
     short active_gpu_count=0;
 	signal(SIGTERM,handle_sigterm);
 	dcgmReturn_t result;
@@ -432,7 +872,7 @@ void start_monitoring(const char *csv_path){
     dcgmFieldGrp_t field_group_id;
 
     printf("[MONITOR] DCGM Init\n");
-	
+	//start?
 	result=dcgmInit();
 	if(result!=DCGM_ST_OK){
 		printf("dcgmInit failed\n");
@@ -467,7 +907,7 @@ void start_monitoring(const char *csv_path){
     }
 
 	//Field 정의
-	unsigned short field_ids[] = {
+	unsigned short basic_field_ids[] = {
         // =========================
         // Power / Energy
         // =========================
@@ -530,20 +970,18 @@ void start_monitoring(const char *csv_path){
         DCGM_FI_DEV_BOARD_LIMIT_VIOLATION,
         DCGM_FI_DEV_LOW_UTIL_VIOLATION,
         DCGM_FI_DEV_RELIABILITY_VIOLATION,
-
-        // =========================
-        // Profiling (Power 원인 분석)
-        // =========================
-        DCGM_FI_PROF_SM_ACTIVE,
-        DCGM_FI_PROF_SM_OCCUPANCY,
-        DCGM_FI_PROF_DRAM_ACTIVE,
-        DCGM_FI_PROF_PIPE_FP32_ACTIVE,
-        DCGM_FI_PROF_PIPE_FP64_ACTIVE,
-        DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-        DCGM_FI_PROF_GR_ENGINE_ACTIVE
     };
-	int field_count = sizeof(field_ids)/sizeof(field_ids[0]);
-	result=dcgmFieldGroupCreate(handle,field_count,field_ids,"directly observed fields",&field_group_id);
+    int final_count = 0;
+    unsigned short *field_ids = set_field_ids(mode,basic_field_ids,sizeof(basic_field_ids)/sizeof(basic_field_ids[0]),&final_count);
+    printf("mode : %hu\n",mode);
+    if(field_ids==NULL){
+        fprintf(stderr,"failed to reset field ids\n");
+        return;
+    }
+    for(int i=0;i<final_count;i++){
+        printf("%hu\n",field_ids[i]);
+    }
+	result=dcgmFieldGroupCreate(handle,final_count,field_ids,"directly observed fields",&field_group_id);
     if(result!=DCGM_ST_OK){
         printf("dcgm field group create failed!\n");
         return;
@@ -573,7 +1011,7 @@ void start_monitoring(const char *csv_path){
     // }
     sleep(1);
 	
-    FILE *fp = initialize_file(csv_path);
+    FILE *fp = initialize_file(csv_path,mode);
     if(!fp){
         printf("failed to initialize csv file");
         return;
@@ -592,96 +1030,7 @@ void start_monitoring(const char *csv_path){
             printf("Failed: \n");
             break;
         }
-        for(short i=0;i<active_gpu_count;i++){
-            fprintf(ctx->fp,
-                "%u,%ld,"            // entityId, timestamp
-
-                // Power
-                "%.2f,%.2f,%lld,"
-
-                // Thermal
-                "%lld,%lld,%lld,%lld,"
-
-                // Clock
-                "%lld,%lld,%lld,%lld,%lld,%lld,"
-
-                // Utilization
-                "%lld,%lld,%lld,%lld,"
-
-                // Memory
-                "%lld,%lld,%lld,"
-
-                // PCIe
-                "%lld,%lld,%lld,"
-
-                // Reliability
-                "%lld,%lld,"
-
-                // Violations
-                "%lld,%lld,%lld,%lld,%lld,%lld,"
-
-                // Profiling
-                "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-
-                ctx->entityId[i],
-                ctx->timestamp[i],
-
-                // Power
-                ctx->power[i],
-                ctx->gpu_power_limit[i],
-                ctx->total_energy[i],
-
-                // Thermal
-                ctx->gpu_temp[i],
-                ctx->memory_temp[i],
-                ctx->slowdown_temp[i],
-                ctx->shutdown_temp[i],
-
-                // Clock
-                ctx->sm_clock[i],
-                ctx->mem_clock[i],
-                ctx->app_sm_clock[i],
-                ctx->app_mem_clock[i],
-                ctx->max_sm_clock[i],
-                ctx->max_mem_clock[i],
-                // Utilization
-                ctx->gpu_util[i],
-                ctx->mem_copy_util[i],
-                ctx->enc_util[i],
-                ctx->dec_util[i],
-
-                // Memory
-                ctx->fb_used[i],
-                ctx->fb_free[i],
-                ctx->fb_total[i],
-
-                // PCIe
-                ctx->pcie_tx[i],
-                ctx->pcie_rx[i],
-                ctx->pcie_replay[i],
-
-                // Reliability
-                ctx->ecc_sbe[i],
-                ctx->ecc_dbe[i],
-
-                // Violations
-                ctx->power_violation[i],
-                ctx->thermal_violation[i],
-                ctx->sync_boost_violation[i],
-                ctx->board_limit_violation[i],
-                ctx->low_util_violation[i],
-                ctx->reliability_violation[i],
-
-                // Profiling
-                ctx->sm_active[i],
-                ctx->sm_occupancy[i],
-                ctx->dram_active[i],
-                ctx->fp32_active[i],
-                ctx->fp64_active[i],
-                ctx->tensor_active[i],
-                ctx->gr_engine_active[i]
-            );
-        }
+        fprintf_by_mode(mode,ctx,active_gpu_count);
         fflush(ctx->fp);
         sleep(1);
     }

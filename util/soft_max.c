@@ -4,13 +4,24 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include "action.h"
+#include <limits.h>
 #include "parse_log_file.h"
-//typedef int (*run_benchmark_t)(const char*, char *const []);
-//typedef void (*start_monitoring_t)(const char*);
-
 #define PATH_MAX 4096
+#define MAX_MODE_VALUE 3
 
-int main(){
+
+
+int main(int argc,const char **argv){
+	if(argc!=3){
+		fprintf(stderr,"%s usage : <csv_file_name> <mode 1,2,3>\n",argv[0]);
+		return 1;
+	}
+
+	const unsigned short mode = strtoul(argv[2],NULL,10);
+	if(mode>=USHRT_MAX||mode<1||mode>MAX_MODE_VALUE){
+		fprintf(stderr,"Inappropriate Mode value. Mode should be one of these values.(1,2,3)\n");
+		return 1;
+	}
 	time_range *t_range=malloc(sizeof(time_range));
 	int bench_pid = fork();
 	long start = get_time_us();
@@ -30,8 +41,8 @@ int main(){
 	}
 	int monitor_pid = fork();
 	if(monitor_pid==0){
-		const char *file_name = "soft_max.csv";
-		do_monitor(file_name);
+		char *file_name =(char*)argv[1];
+		do_monitor(file_name,mode);
 		exit(0);
 	}
 
@@ -45,6 +56,5 @@ int main(){
 	t_range->start=start;
 	t_range->end=end;
 	printf("child process %d ended\n",monitor_pid);
-	parse_stats_targeted_power(t_range,"soft_max.txt");
 	return 0;
 }

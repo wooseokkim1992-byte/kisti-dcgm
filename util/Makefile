@@ -14,7 +14,7 @@ LDFLAGS= -L $(ACTION_PATH) -laction -L $(MONITOR_PATH) -lmonitor -L $(BENCHMARK_
 CFLAGS  += -I$(DCGM_INC)
 LDFLAGS += -L$(DCGM_LIB) -ldcgm
 
-all: $(PARSE_LOG_FILE_PATH)/libparse_log_file.a $(BENCHMARK_PATH)/libbenchmark.so $(MONITOR_PATH)/libmonitor.so $(ACTION_PATH)/libaction.a soft_max batch_norm max_pool embedding
+all: $(PARSE_LOG_FILE_PATH)/libparse_log_file.a $(BENCHMARK_PATH)/libbenchmark.so $(MONITOR_PATH)/libmonitor.so $(ACTION_PATH)/libaction.a soft_max 
 
 # -------------------
 # parse log file
@@ -66,29 +66,29 @@ soft_max:soft_max.o $(ACTION_PATH)/libaction.a $(PARSE_LOG_FILE_PATH)/libparse_l
 # -------------------
 # batch_norm
 # -------------------
-batch_norm.o: batch_norm.c
-	$(CC) -c -I$(ACTION_PATH) $< -o $@
+# batch_norm.o: batch_norm.c
+# 	$(CC) -c -I$(ACTION_PATH) $< -o $@
 
-batch_norm:batch_norm.o $(ACTION_PATH)/libaction.a
-	$(CC) batch_norm.o $(LDFLAGS) -o $@
+# batch_norm:batch_norm.o $(ACTION_PATH)/libaction.a
+# 	$(CC) batch_norm.o $(LDFLAGS) -o $@
 
 # -------------------
 # max_pool
 # -------------------
-max_pool.o: max_pool.c
-	$(CC) -c -I$(ACTION_PATH) $< -o $@
+# max_pool.o: max_pool.c
+# 	$(CC) -c -I$(ACTION_PATH) $< -o $@
 
-max_pool:max_pool.o $(ACTION_PATH)/libaction.a
-	$(CC) max_pool.o $(LDFLAGS) -o $@
+# max_pool:max_pool.o $(ACTION_PATH)/libaction.a
+# 	$(CC) max_pool.o $(LDFLAGS) -o $@
 
 # -------------------
 # embedding
 # -------------------
-embedding.o: embedding.c
-	$(CC) -c -I$(ACTION_PATH) $< -o $@
+# embedding.o: embedding.c
+# 	$(CC) -c -I$(ACTION_PATH) $< -o $@
 
-embedding:embedding.o $(ACTION_PATH)/libaction.a
-	$(CC) embedding.o $(LDFLAGS) -o $@
+# embedding:embedding.o $(ACTION_PATH)/libaction.a
+# 	$(CC) embedding.o $(LDFLAGS) -o $@
 
 clean:
 	rm -f ./soft_max ./embedding ./max_pool ./batch_norm

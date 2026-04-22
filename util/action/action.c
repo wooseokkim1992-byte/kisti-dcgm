@@ -7,7 +7,7 @@
 
 #define PATH_MAX 4096
 typedef  int (*run_benchmark_t)(const char *,const char *,char *const[]);
-typedef void (*start_monitoring_t)(const char *);
+typedef void (*start_monitoring_t)(const char *,const unsigned short mode);
 
 char* reconstruct_path(const char *src){
     char cwd[PATH_MAX];
@@ -53,7 +53,8 @@ void exec_benchmark(const char *exe_dir,const char *exe_path,char *args[]){
     dlclose(bench_handle);
 }
 
-void do_monitor(const char *filename){
+void do_monitor(const char *filename,const unsigned short mode){
+    printf("mode : %hu\n",mode);
     char *monitor_dll_path=reconstruct_path("monitor/libmonitor.so");
     if(monitor_dll_path==NULL){
         exit(1);
@@ -82,6 +83,6 @@ void do_monitor(const char *filename){
         printf("dlsym error:%s\n", dl_error);
         exit(1);
     }
-    start_monitoring(csv_path);
+    start_monitoring(csv_path,mode);
     dlclose(monitor_handle);
 }

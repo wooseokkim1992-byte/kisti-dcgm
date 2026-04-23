@@ -873,6 +873,7 @@ void start_monitoring(const char *csv_path,const unsigned short mode){
 
     printf("[MONITOR] DCGM Init\n");
 	//start?
+    long start_ts=get_time_us();
 	result=dcgmInit();
 	if(result!=DCGM_ST_OK){
 		printf("dcgmInit failed\n");
@@ -1018,7 +1019,6 @@ void start_monitoring(const char *csv_path,const unsigned short mode){
     }
     monitor_ctx_t *ctx=(monitor_ctx_t*)calloc(1,sizeof(monitor_ctx_t));
     ctx->fp = fp;
-    long start_ts=get_time_us();
     while (keepRunning==1) {
         dcgmReturn_t st = dcgmGetLatestValues_v2(handle,
                                                 group_id,

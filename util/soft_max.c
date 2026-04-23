@@ -3,13 +3,10 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include "action.h"
+#include "action_act.h"
 #include <limits.h>
-#include "parse_log_file.h"
 #define PATH_MAX 4096
 #define MAX_MODE_VALUE 3
-
-
 
 int main(int argc,const char **argv){
 	if(argc!=3){
@@ -22,9 +19,7 @@ int main(int argc,const char **argv){
 		fprintf(stderr,"Inappropriate Mode value. Mode should be one of these values.(1,2,3)\n");
 		return 1;
 	}
-	time_range *t_range=malloc(sizeof(time_range));
 	int bench_pid = fork();
-	long start = get_time_us();
 
 	if(bench_pid==0){
         setenv("PYTHONPATH", "/home/wskim/miniconda3/envs/torch_gpu/lib/python3.10/site-packages", 1);
@@ -52,9 +47,6 @@ int main(int argc,const char **argv){
 	printf("child process %d ended\n",bench_pid);
 	kill(monitor_pid,SIGTERM);
 	waitpid(monitor_pid,NULL,0);
-	long end = get_time_us();
-	t_range->start=start;
-	t_range->end=end;
 	printf("child process %d ended\n",monitor_pid);
 	return 0;
 }

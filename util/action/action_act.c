@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <unistd.h>
-#include "action.h"
+#include "action_act.h"
 #include <string.h>
 
 #define PATH_MAX 4096

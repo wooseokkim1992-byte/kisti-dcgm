@@ -7,14 +7,14 @@ PARSE_LOG_FILE_PATH=./parse_log_file
 DCGM_INC ?= /usr/include/datacenter-gpu-manager-4
 DCGM_LIB ?= /usr/lib/x86_64-linux-gnu
 
-ACTION_OBJS = $(ACTION_PATH)/action.o
+ACTION_OBJS = $(ACTION_PATH)/action_act.o
 CFLAGS=-fPIC -Wall -O2
-LDFLAGS= -L $(ACTION_PATH) -laction -L $(MONITOR_PATH) -lmonitor -L $(BENCHMARK_PATH) -lbenchmark -L $(PARSE_LOG_FILE_PATH) -lparse_log_file -Wl,-rpath=$(BENCHMARK_PATH) -Wl,-rpath=$(MONITOR_PATH) -ldl -lyajl
+LDFLAGS= -L $(ACTION_PATH) -laction_act -L $(MONITOR_PATH) -lmonitor -L $(BENCHMARK_PATH) -lbenchmark -L $(PARSE_LOG_FILE_PATH) -lparse_log_file -Wl,-rpath=$(BENCHMARK_PATH) -Wl,-rpath=$(MONITOR_PATH) -ldl -lyajl
 # DCGM version 4 
 CFLAGS  += -I$(DCGM_INC)
 LDFLAGS += -L$(DCGM_LIB) -ldcgm
 
-all: $(PARSE_LOG_FILE_PATH)/libparse_log_file.a $(BENCHMARK_PATH)/libbenchmark.so $(MONITOR_PATH)/libmonitor.so $(ACTION_PATH)/libaction.a soft_max 
+all: $(PARSE_LOG_FILE_PATH)/libparse_log_file.a $(BENCHMARK_PATH)/libbenchmark.so $(MONITOR_PATH)/libmonitor.so $(ACTION_PATH)/libaction_act.a soft_max batch_norm max_pool embedding 
 
 # -------------------
 # parse log file
@@ -29,10 +29,10 @@ $(PARSE_LOG_FILE_PATH)/libparse_log_file.a: $(PARSE_LOG_FILE_PATH)/parse_log_fil
 # -------------------
 # action
 # -------------------
-$(ACTION_PATH)/action.o: $(ACTION_PATH)/action.c 
+$(ACTION_PATH)/action_act.o: $(ACTION_PATH)/action_act.c 
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(ACTION_PATH)/libaction.a: $(ACTION_OBJS)
+$(ACTION_PATH)/libaction_act.a: $(ACTION_OBJS)
 	ar rcs $@ $^
 
 # -------------------
@@ -60,35 +60,35 @@ $(MONITOR_PATH)/libmonitor.so: $(MONITOR_PATH)/monitor.o $(PARSE_LOG_FILE_PATH)/
 soft_max.o: soft_max.c
 	$(CC) -c -I$(ACTION_PATH) -I$(PARSE_LOG_FILE_PATH) $< -o $@
 
-soft_max:soft_max.o $(ACTION_PATH)/libaction.a $(PARSE_LOG_FILE_PATH)/libparse_log_file.a
+soft_max:soft_max.o $(ACTION_PATH)/libaction_act.a $(PARSE_LOG_FILE_PATH)/libparse_log_file.a
 	$(CC) soft_max.o $(LDFLAGS) -o $@ 
 
 # -------------------
 # batch_norm
 # -------------------
-# batch_norm.o: batch_norm.c
-# 	$(CC) -c -I$(ACTION_PATH) $< -o $@
+batch_norm.o: batch_norm.c
+	$(CC) -c -I$(ACTION_PATH) $< -o $@
 
-# batch_norm:batch_norm.o $(ACTION_PATH)/libaction.a
-# 	$(CC) batch_norm.o $(LDFLAGS) -o $@
+batch_norm:batch_norm.o $(ACTION_PATH)/libaction_act.a
+	$(CC) batch_norm.o $(LDFLAGS) -o $@
 
 # -------------------
-# max_pool
-# -------------------
-# max_pool.o: max_pool.c
-# 	$(CC) -c -I$(ACTION_PATH) $< -o $@
+#max_pool
+#-------------------
+max_pool.o: max_pool.c
+	$(CC) -c -I$(ACTION_PATH) $< -o $@
 
-# max_pool:max_pool.o $(ACTION_PATH)/libaction.a
-# 	$(CC) max_pool.o $(LDFLAGS) -o $@
+max_pool:max_pool.o $(ACTION_PATH)/libaction_act.a
+	$(CC) max_pool.o $(LDFLAGS) -o $@
 
 # -------------------
 # embedding
 # -------------------
-# embedding.o: embedding.c
-# 	$(CC) -c -I$(ACTION_PATH) $< -o $@
+embedding.o: embedding.c
+	$(CC) -c -I$(ACTION_PATH) $< -o $@
 
-# embedding:embedding.o $(ACTION_PATH)/libaction.a
-# 	$(CC) embedding.o $(LDFLAGS) -o $@
+embedding:embedding.o $(ACTION_PATH)/libaction_act.a
+	$(CC) embedding.o $(LDFLAGS) -o $@
 
 clean:
 	rm -f ./soft_max ./embedding ./max_pool ./batch_norm

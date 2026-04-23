@@ -3,13 +3,24 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <signal.h>
-
-#include "action.h"
+#include <limits.h>
+#include <limits.h>
+#include "action_act.h"
 //typedef int (*run_benchmark_t)(const char*, char *const []);
 typedef void (*start_monitoring_t)(const char*);
 #define PATH_MAX 4096
+#define MAX_MODE_VALUE 3
 
-int main(){
+int main(const int argc,const char **argv){
+	if(argc!=3){
+		fprintf(stderr,"%s usage : <csv_file_name> <mode 1,2,3>\n",argv[0]);
+		return 1;
+	}
+	const unsigned short mode = strtoul(argv[2],NULL,10);
+	if(mode>=USHRT_MAX||mode<1||mode>MAX_MODE_VALUE){
+		fprintf(stderr,"Inappropriate Mode value. Mode should be one of these values.(1,2,3)\n");
+		return 1;
+	}
 	int bench_pid = fork();
 	if(bench_pid==0){
         setenv("PYTHONPATH", "/home/wskim/miniconda3/envs/torch_gpu/lib/python3.10/site-packages", 1);
@@ -26,8 +37,8 @@ int main(){
 	}
 	int monitor_pid = fork();
 	if(monitor_pid==0){
-		const char *file_name = "embedding.csv";
-		do_monitor(file_name);
+		const char *file_name = argv[1];
+		do_monitor(file_name,mode);
 		exit(0);
 	}
 

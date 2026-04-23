@@ -10,7 +10,7 @@ x = torch.randn(batch_size, channels, height, width, device=device)
 bn = nn.BatchNorm2d(channels).to(device)
 
 start = time.time()
-for _ in range(1000):
+for _ in range(1000000):
     y = bn(x)
 torch.cuda.synchronize()  # GPU 연산 동기화
 print(f"BatchNorm2d: {time.time()-start:.4f} sec")

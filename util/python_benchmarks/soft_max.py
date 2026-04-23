@@ -15,7 +15,7 @@ for _ in range(10):
 # Timing
 torch.cuda.synchronize()
 start = time.time()
-for _ in range(50000):
+for _ in range(100000):
     _ = torch.nn.functional.softmax(x, dim=1)
 torch.cuda.synchronize()
 end = time.time()

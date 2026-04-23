@@ -6,7 +6,7 @@
 #include "action_act.h"
 #include <limits.h>
 #define PATH_MAX 4096
-#define MAX_MODE_VALUE 3
+#define MAX_MODE_VALUE 5
 
 int main(int argc,const char **argv){
 	if(argc!=3){
@@ -40,8 +40,6 @@ int main(int argc,const char **argv){
 		do_monitor(file_name,mode);
 		exit(0);
 	}
-
-
 	sleep(1);
 	waitpid(bench_pid,NULL,0);
 	printf("child process %d ended\n",bench_pid);

@@ -6,10 +6,9 @@
 #include <limits.h>
 #include <limits.h>
 #include "action_act.h"
-//typedef int (*run_benchmark_t)(const char*, char *const []);
-typedef void (*start_monitoring_t)(const char*);
+
 #define PATH_MAX 4096
-#define MAX_MODE_VALUE 3
+#define MAX_MODE_VALUE 5
 
 int main(const int argc,const char **argv){
 	if(argc!=3){

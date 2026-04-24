@@ -14,6 +14,10 @@ LDFLAGS= -L $(ACTION_PATH) -laction_act -L $(MONITOR_PATH) -lmonitor -L $(BENCHM
 CFLAGS  += -I$(DCGM_INC)
 LDFLAGS += -L$(DCGM_LIB) -ldcgm
 
+NVML_H_LOCATION := /usr/local/cuda-12.2/targets/x86_64-linux/include
+NVIDIA_DLL_PATH := /usr/lib/i386-linux-gnu/libnvidia-ml.so.535.288.01
+NVIDIA_DLL_NAME := nvidia-ml
+
 all: $(PARSE_LOG_FILE_PATH)/libparse_log_file.a $(BENCHMARK_PATH)/libbenchmark.so $(MONITOR_PATH)/libmonitor.so $(ACTION_PATH)/libaction_act.a soft_max batch_norm max_pool embedding 
 
 # -------------------
@@ -51,7 +55,10 @@ $(BENCHMARK_PATH)/libbenchmark.so: $(BENCHMARK_PATH)/benchmark.o
 $(MONITOR_PATH)/monitor.o: $(MONITOR_PATH)/monitor.c 
 	$(CC) $(CFLAGS) -c $< -I$(PARSE_LOG_FILE_PATH) -o $@
 
-$(MONITOR_PATH)/libmonitor.so: $(MONITOR_PATH)/monitor.o $(PARSE_LOG_FILE_PATH)/parse_log_file.o
+$(MONITOR_PATH)/monitor_overhead.o: $(MONITOR_PATH)/monitor_overhead.c
+	$(CC) -fPIC -c $< -I$(NVML_H_LOCATION) -L$(NVIDIA_DLL_PATH) -l$(NVIDIA_DLL_NAME)  -o $@
+
+$(MONITOR_PATH)/libmonitor.so: $(MONITOR_PATH)/monitor.o $(MONITOR_PATH)/monitor_overhead.o $(PARSE_LOG_FILE_PATH)/parse_log_file.o
 	$(CC) -shared $^ -o $@ -ldcgm
 
 # -------------------

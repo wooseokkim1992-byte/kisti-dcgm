@@ -10,10 +10,6 @@
 #include <dcgm_fields.h>
 #include "parse_log_file.h"
 
-#define NUM_FIELDS 7
-#define MAX_GPUS 16
-#define MAX_FIELDS 16
-
 static volatile sig_atomic_t keepRunning = 1;
 
 typedef struct {

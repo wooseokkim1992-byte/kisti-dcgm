@@ -5,9 +5,9 @@
 #include "action_act.h"
 #include <string.h>
 
-#define PATH_MAX 4096
 typedef  int (*run_benchmark_t)(const char *,const char *,char *const[]);
-typedef void (*start_monitoring_t)(const char *,const unsigned short mode);
+typedef void (*start_monitoring_t)(const char *,const unsigned short);
+typedef void (*start_monitor_overhead_t)(const char *,const unsigned short);
 
 char* reconstruct_path(const char *src){
     char cwd[PATH_MAX];
@@ -53,20 +53,29 @@ void exec_benchmark(const char *exe_dir,const char *exe_path,char *args[]){
     dlclose(bench_handle);
 }
 
-void do_monitor(const char *filename,const unsigned short mode){
+void do_monitor(const char *filename,const unsigned short mode,const char *monitor_mode){
     printf("mode : %hu\n",mode);
     char *monitor_dll_path=reconstruct_path("monitor/libmonitor.so");
     if(monitor_dll_path==NULL){
         exit(1);
     }
-    char csv_path[PATH_MAX];
-    if(snprintf(csv_path,sizeof(csv_path),"../result/metric/%s",filename)>sizeof(csv_path)){
+    char result_file_path[PATH_MAX];
+    char result_dir_path[PATH_MAX];
+    if(strcmp(monitor_mode,"monitor")==0){
+        strcpy(result_dir_path,"../result/metric");
+    }else if(strcmp(monitor_mode,"overhead")==0){
+        strcpy(result_dir_path,"../result/overhead");
+    }else{
+        fprintf(stderr,"Inappropirate monitor mode name. It should be \"monitor\" or \"overhead\"\n");
+        exit(1);
+    }
+    if(snprintf(result_file_path,sizeof(result_file_path),"%s/%s",result_dir_path,filename)>sizeof(result_file_path)){
         perror("filename truncated!\n");
         exit(1);
     }
 
     printf("dll path %s\n",monitor_dll_path);
-    printf("csv_path %s\n",csv_path);
+    printf("csv_path %s\n",result_file_path);
 
     dlerror();
     void *monitor_handle=dlopen(monitor_dll_path,RTLD_LAZY);
@@ -76,13 +85,25 @@ void do_monitor(const char *filename,const unsigned short mode){
         printf("dlsym error:%s\n", dl_error);
         exit(1);
     }
-    start_monitoring_t start_monitoring = (start_monitoring_t)dlsym(monitor_handle,"start_monitoring");
-    dl_error=dlerror();
-    if(dl_error){
-        dlclose(monitor_handle);
-        printf("dlsym error:%s\n", dl_error);
-        exit(1);
+    if(strcmp(monitor_mode,"monitor")==0){
+        start_monitoring_t start_monitoring = (start_monitoring_t)dlsym(monitor_handle,"start_monitoring");
+        dl_error=dlerror();
+        if(dl_error){
+            dlclose(monitor_handle);
+            fprintf(stderr,"dlsym error:%s\n", dl_error);
+            exit(1);
+        }
+        start_monitoring(result_file_path,mode);
+    }else if(strcmp(monitor_mode,"overhead")==0){
+        start_monitor_overhead_t start_monitor_overhead = (start_monitor_overhead_t)dlsym(monitor_handle,"start_monitor_overhead");
+        dl_error=dlerror();
+        if(dl_error){
+            fprintf(stderr,"dlsym error:%s\n", dl_error);
+            dlclose(monitor_dll_path);
+            exit(1);
+        }
+        start_monitor_overhead(result_file_path,mode);
     }
-    start_monitoring(csv_path,mode);
     dlclose(monitor_handle);
+    
 }

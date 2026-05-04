@@ -6,16 +6,16 @@ PARSE_LOG_FILE_PATH=./parse_log_file
 # DCGM version 4 
 DCGM_INC ?= /usr/include/datacenter-gpu-manager-4
 DCGM_LIB ?= /usr/lib/x86_64-linux-gnu
-
+DCGM_LIB_NAME := dcgm
 ACTION_OBJS = $(ACTION_PATH)/action_act.o
 CFLAGS=-fPIC -Wall -O2
 LDFLAGS= -L $(ACTION_PATH) -laction_act -L $(MONITOR_PATH) -lmonitor -L $(BENCHMARK_PATH) -lbenchmark -L $(PARSE_LOG_FILE_PATH) -lparse_log_file -Wl,-rpath=$(BENCHMARK_PATH) -Wl,-rpath=$(MONITOR_PATH) -ldl -lyajl
 # DCGM version 4 
 CFLAGS  += -I$(DCGM_INC)
-LDFLAGS += -L$(DCGM_LIB) -ldcgm
+#LDFLAGS += -L$(DCGM_LIB) -l$(DCGM_LIB_NAME)
 
 NVML_H_LOCATION := /usr/local/cuda-12.2/targets/x86_64-linux/include
-NVIDIA_DLL_PATH := /usr/lib/i386-linux-gnu/libnvidia-ml.so.535.288.01
+NVIDIA_DLL_PATH := /usr/lib/x86_64-linux-gnu
 NVIDIA_DLL_NAME := nvidia-ml
 
 all: $(PARSE_LOG_FILE_PATH)/libparse_log_file.a $(BENCHMARK_PATH)/libbenchmark.so $(MONITOR_PATH)/libmonitor.so $(ACTION_PATH)/libaction_act.a soft_max batch_norm max_pool embedding 
@@ -34,7 +34,7 @@ $(PARSE_LOG_FILE_PATH)/libparse_log_file.a: $(PARSE_LOG_FILE_PATH)/parse_log_fil
 # action
 # -------------------
 $(ACTION_PATH)/action_act.o: $(ACTION_PATH)/action_act.c 
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -fPIC -Wall -O2 -c $< -o $@
 
 $(ACTION_PATH)/libaction_act.a: $(ACTION_OBJS)
 	ar rcs $@ $^
@@ -53,13 +53,13 @@ $(BENCHMARK_PATH)/libbenchmark.so: $(BENCHMARK_PATH)/benchmark.o
 # monitor
 # -------------------
 $(MONITOR_PATH)/monitor.o: $(MONITOR_PATH)/monitor.c 
-	$(CC) $(CFLAGS) -c $< -I$(PARSE_LOG_FILE_PATH) -o $@
+	$(CC) $(CFLAGS) -I$(PARSE_LOG_FILE_PATH) -c $< -o $@
 
-$(MONITOR_PATH)/monitor_overhead.o: $(MONITOR_PATH)/monitor_overhead.c
-	$(CC) -fPIC -c $< -I$(NVML_H_LOCATION) -L$(NVIDIA_DLL_PATH) -l$(NVIDIA_DLL_NAME)  -o $@
+$(MONITOR_PATH)/monitor_overhead.o: $(MONITOR_PATH)/monitor_overhead.c 
+	$(CC) $(CFLAGS) -I$(NVML_H_LOCATION) -I$(PARSE_LOG_FILE_PATH) -c $< -o $@
 
-$(MONITOR_PATH)/libmonitor.so: $(MONITOR_PATH)/monitor.o $(MONITOR_PATH)/monitor_overhead.o $(PARSE_LOG_FILE_PATH)/parse_log_file.o
-	$(CC) -shared $^ -o $@ -ldcgm
+$(MONITOR_PATH)/libmonitor.so: $(MONITOR_PATH)/monitor.o $(MONITOR_PATH)/monitor_overhead.o $(PARSE_LOG_FILE_PATH)/libparse_log_file.a
+	$(CC) -shared $^ -o $@ -L$(NVIDIA_DLL_PATH) -l$(NVIDIA_DLL_NAME) -L$(DCGM_LIB) -l$(DCGM_LIB_NAME) -lyajl -lpthread 
 
 # -------------------
 # soft_max
@@ -67,7 +67,7 @@ $(MONITOR_PATH)/libmonitor.so: $(MONITOR_PATH)/monitor.o $(MONITOR_PATH)/monitor
 soft_max.o: soft_max.c
 	$(CC) -c -I$(ACTION_PATH) -I$(PARSE_LOG_FILE_PATH) $< -o $@
 
-soft_max:soft_max.o $(ACTION_PATH)/libaction_act.a $(PARSE_LOG_FILE_PATH)/libparse_log_file.a
+soft_max:soft_max.o $(ACTION_PATH)/libaction_act.a
 	$(CC) soft_max.o $(LDFLAGS) -o $@ 
 
 # -------------------

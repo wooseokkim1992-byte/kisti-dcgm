@@ -17,7 +17,7 @@ x = torch.randn(batch_size, channels, height, width, device=device)
 maxpool = nn.MaxPool2d(kernel_size=4, stride=2).to(device)
 
 start = time.time()
-for _ in range(30000):
+for _ in range(1000):
     y = maxpool(x)
 torch.cuda.synchronize()
 print(f"MaxPool2d: {time.time()-start:.4f} sec")

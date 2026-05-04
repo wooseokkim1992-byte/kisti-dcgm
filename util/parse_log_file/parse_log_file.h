@@ -1,6 +1,6 @@
 #ifndef PARSE_LOG_FILE
 #define PARSE_LOG_FILE
-#include <time.h>
+#include <stdio.h>
 
     typedef struct {
         long start;
@@ -20,7 +20,7 @@
 
         long current_timestamp;
     } parse_power_usage_ctx;
-
+    void sleep_us(long microseconds);
     long get_time_us(void);
     int parse_stats_targeted_power(time_range *t_range,const char *log_filename);
 #endif

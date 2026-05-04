@@ -37,7 +37,7 @@ int main(int argc,const char **argv){
 	int monitor_pid = fork();
 	if(monitor_pid==0){
 		char *file_name =(char*)argv[1];
-		do_monitor(file_name,mode);
+		do_monitor(file_name,mode,"monitor");
 		exit(0);
 	}
 	sleep(1);

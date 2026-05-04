@@ -14,6 +14,12 @@
 #define MAX_FILE_PATH 255
 #define BUFFER_SIZE 4096
 
+void sleep_us(long microseconds) {
+    struct timespec ts;
+    ts.tv_sec = microseconds / 1000000;
+    ts.tv_nsec = (microseconds % 1000000) * 1000;
+    nanosleep(&ts, NULL);
+}
 
 long get_time_us(){
     struct timespec ts;

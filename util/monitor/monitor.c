@@ -1,103 +1,13 @@
-
-#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include <string.h>
-#include <stdlib.h>
 #include "monitor.h"
 #include <dcgm_structs.h>
 #include <dcgm_agent.h>
-#include <dcgm_fields.h>
+#include <string.h>
 #include "parse_log_file.h"
 
 static volatile sig_atomic_t keepRunning = 1;
-
-typedef struct {
-    FILE *fp;
-
-    dcgm_field_eid_t entityId[MAX_FIELDS];
-    long timestamp[MAX_FIELDS];
-
-    // =========================
-    // Power
-    // =========================
-    double power[MAX_FIELDS];
-    double gpu_power_limit[MAX_FIELDS];
-    long long total_energy[MAX_FIELDS];
-
-    // =========================
-    // Thermal
-    // =========================
-    long long gpu_temp[MAX_FIELDS];
-    long long memory_temp[MAX_FIELDS];
-    long long slowdown_temp[MAX_FIELDS];
-    long long shutdown_temp[MAX_FIELDS];
-
-    // =========================
-    // Clock
-    // =========================
-    long long sm_clock[MAX_FIELDS];
-    long long mem_clock[MAX_FIELDS];
-    long long app_sm_clock[MAX_FIELDS];
-    long long app_mem_clock[MAX_FIELDS];
-    long long max_sm_clock[MAX_FIELDS];
-    long long max_mem_clock[MAX_FIELDS];
-
-    // =========================
-    // Utilization
-    // =========================
-    long long gpu_util[MAX_FIELDS];
-    long long mem_copy_util[MAX_FIELDS];
-    long long enc_util[MAX_FIELDS];
-    long long dec_util[MAX_FIELDS];
-
-    // =========================
-    // Memory
-    // =========================
-    long long fb_used[MAX_FIELDS];
-    long long fb_free[MAX_FIELDS];
-    long long fb_total[MAX_FIELDS];
-
-    // =========================
-    // PCIe
-    // =========================
-    long long pcie_tx_throughput[MAX_FIELDS];
-    long long pcie_rx_throughput[MAX_FIELDS];
-    long long pcie_replay[MAX_FIELDS];
-
-    // =========================
-    // Reliability
-    // =========================
-    long long ecc_sbe[MAX_FIELDS];
-    long long ecc_dbe[MAX_FIELDS];
-
-    // =========================
-    // Violations
-    // =========================
-    long long power_violation[MAX_FIELDS];
-    long long thermal_violation[MAX_FIELDS];
-    long long sync_boost_violation[MAX_FIELDS];
-    long long board_limit_violation[MAX_FIELDS];
-    long long low_util_violation[MAX_FIELDS];
-    long long reliability_violation[MAX_FIELDS];
-
-    // =========================
-    // Profiling
-    // =========================
-    double sm_active[MAX_FIELDS];
-    double sm_occupancy[MAX_FIELDS];
-    double tensor_active[MAX_FIELDS];
-    double fp64_active[MAX_FIELDS];
-    double fp32_active[MAX_FIELDS];
-    double fp16_active[MAX_FIELDS];
-    double dram_active[MAX_FIELDS];
-    double pcie_tx[MAX_FIELDS];
-    double pcie_rx[MAX_FIELDS];
-    double gr_engine_active[MAX_FIELDS];
-    double nvlink_tx_bytes[MAX_FIELDS];
-    double nvlink_rx_bytes[MAX_FIELDS];
-
-} monitor_ctx_t;
 
 void stop_monitoring(void){
 	keepRunning = 0;
@@ -106,6 +16,153 @@ void stop_monitoring(void){
 static void handle_sigterm(int sig){
 	(void)sig;
 	keepRunning = 0; 
+}
+const unsigned short basic_field_ids[] = {
+    // =========================
+    // Power / Energy
+    // =========================
+    DCGM_FI_DEV_POWER_USAGE,
+    DCGM_FI_DEV_POWER_MGMT_LIMIT,
+    DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION,
+
+    // =========================
+    // Thermal (Power 영향)
+    // =========================
+    DCGM_FI_DEV_GPU_TEMP,
+    DCGM_FI_DEV_MEMORY_TEMP,
+    DCGM_FI_DEV_SLOWDOWN_TEMP,
+    DCGM_FI_DEV_SHUTDOWN_TEMP,
+
+    // =========================
+    // Clock (Power scaling 핵심)
+    // =========================
+    DCGM_FI_DEV_SM_CLOCK,
+    DCGM_FI_DEV_MEM_CLOCK,
+    DCGM_FI_DEV_APP_SM_CLOCK,
+    DCGM_FI_DEV_APP_MEM_CLOCK,
+    DCGM_FI_DEV_MAX_SM_CLOCK,
+    DCGM_FI_DEV_MAX_MEM_CLOCK,
+
+    // =========================
+    // Utilization (Power 원인)
+    // =========================
+    DCGM_FI_DEV_GPU_UTIL,
+    DCGM_FI_DEV_MEM_COPY_UTIL,
+    DCGM_FI_DEV_ENC_UTIL,
+    DCGM_FI_DEV_DEC_UTIL,
+
+    // =========================
+    // Memory (Power contributor)
+    // =========================
+    DCGM_FI_DEV_FB_USED,
+    DCGM_FI_DEV_FB_FREE,
+    DCGM_FI_DEV_FB_TOTAL,
+
+    // =========================
+    // PCIe / IO (Power 영향)
+    // =========================
+    DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
+    DCGM_FI_DEV_PCIE_RX_THROUGHPUT,
+    DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+
+    // =========================
+    // Reliability (간접 영향)
+    // =========================
+    DCGM_FI_DEV_ECC_SBE_VOL_TOTAL,
+    DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+
+    // =========================
+    // Throttle / Violation (핵심)
+    // =========================
+    DCGM_FI_DEV_POWER_VIOLATION,
+    DCGM_FI_DEV_THERMAL_VIOLATION,
+    DCGM_FI_DEV_SYNC_BOOST_VIOLATION,
+    DCGM_FI_DEV_BOARD_LIMIT_VIOLATION,
+    DCGM_FI_DEV_LOW_UTIL_VIOLATION,
+    DCGM_FI_DEV_RELIABILITY_VIOLATION,
+};
+size_t basic_field_size = sizeof(basic_field_ids)/sizeof(basic_field_ids[0]);
+unsigned short* set_field_ids(unsigned short mode,const unsigned short *basic_field_ids,size_t count,int *final_count){
+    unsigned short *field_ids;
+    unsigned short *new_field_ids=NULL;
+    size_t basic_count = count;
+    size_t additional_count = 0;
+    if(mode==1){
+        static unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_SM_ACTIVE,
+            DCGM_FI_PROF_SM_OCCUPANCY,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=additional_field_ids;
+    }else if(mode==2){
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode==3){
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode==4){
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_FP64_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode ==5){
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_FP16_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else{
+        return NULL;
+    }
+    size_t total = basic_count+additional_count;
+    *final_count=total;
+    field_ids=malloc(sizeof(unsigned short)*total);
+    if(field_ids==NULL){
+        return NULL;
+    }
+    memcpy(field_ids,basic_field_ids,basic_count*sizeof(unsigned short));
+    memcpy(field_ids+basic_count,new_field_ids,additional_count*sizeof(unsigned short));
+    return field_ids;
 }
 
 void disconnect_fn(dcgmHandle_t *handle,dcgmFieldGrp_t *field_group_id,dcgmGpuGrp_t *group_id,monitor_ctx_t **c){
@@ -686,89 +743,6 @@ char** set_field_names(const unsigned short mode, const char* basic_field_names[
     return final_field_names;
 }
 
-unsigned short* set_field_ids(unsigned short mode,unsigned short*basic_field_ids,size_t count,int *final_count){
-    unsigned short *field_ids;
-    unsigned short *new_field_ids=NULL;
-    size_t basic_count = count;
-    size_t additional_count = 0;
-    if(mode==1){
-        static unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_SM_ACTIVE,
-            DCGM_FI_PROF_SM_OCCUPANCY,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
-        };
-        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
-        new_field_ids=additional_field_ids;
-    }else if(mode==2){
-        static const unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
-        };
-        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
-        new_field_ids=(unsigned short *)additional_field_ids;
-    }else if(mode==3){
-        static const unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
-        };
-        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
-        new_field_ids=(unsigned short *)additional_field_ids;
-    }else if(mode==4){
-        static const unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_PIPE_FP64_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
-        };
-        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
-        new_field_ids=(unsigned short *)additional_field_ids;
-    }else if(mode ==5){
-        static const unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_PIPE_FP16_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
-        };
-        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
-        new_field_ids=(unsigned short *)additional_field_ids;
-    }else{
-        return NULL;
-    }
-    size_t total = basic_count+additional_count;
-    *final_count=total;
-    field_ids=malloc(sizeof(unsigned short)*total);
-    if(field_ids==NULL){
-        return NULL;
-    }
-    memcpy(field_ids,basic_field_ids,basic_count*sizeof(unsigned short));
-    memcpy(field_ids+basic_count,new_field_ids,additional_count*sizeof(unsigned short));
-    return field_ids;
-}
-
 FILE* initialize_file(const char *csv_path,const unsigned short mode){
     FILE *fp = fopen(csv_path,"w");
     if(!fp){
@@ -1136,70 +1110,6 @@ void start_monitoring(const char *csv_path,const unsigned short mode){
     }
 
 	//Field 정의
-	unsigned short basic_field_ids[] = {
-        // =========================
-        // Power / Energy
-        // =========================
-        DCGM_FI_DEV_POWER_USAGE,
-        DCGM_FI_DEV_POWER_MGMT_LIMIT,
-        DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION,
-
-        // =========================
-        // Thermal (Power 영향)
-        // =========================
-        DCGM_FI_DEV_GPU_TEMP,
-        DCGM_FI_DEV_MEMORY_TEMP,
-        DCGM_FI_DEV_SLOWDOWN_TEMP,
-        DCGM_FI_DEV_SHUTDOWN_TEMP,
-
-        // =========================
-        // Clock (Power scaling 핵심)
-        // =========================
-        DCGM_FI_DEV_SM_CLOCK,
-        DCGM_FI_DEV_MEM_CLOCK,
-        DCGM_FI_DEV_APP_SM_CLOCK,
-        DCGM_FI_DEV_APP_MEM_CLOCK,
-        DCGM_FI_DEV_MAX_SM_CLOCK,
-        DCGM_FI_DEV_MAX_MEM_CLOCK,
-
-        // =========================
-        // Utilization (Power 원인)
-        // =========================
-        DCGM_FI_DEV_GPU_UTIL,
-        DCGM_FI_DEV_MEM_COPY_UTIL,
-        DCGM_FI_DEV_ENC_UTIL,
-        DCGM_FI_DEV_DEC_UTIL,
-
-        // =========================
-        // Memory (Power contributor)
-        // =========================
-        DCGM_FI_DEV_FB_USED,
-        DCGM_FI_DEV_FB_FREE,
-        DCGM_FI_DEV_FB_TOTAL,
-
-        // =========================
-        // PCIe / IO (Power 영향)
-        // =========================
-        DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
-        DCGM_FI_DEV_PCIE_RX_THROUGHPUT,
-        DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-
-        // =========================
-        // Reliability (간접 영향)
-        // =========================
-        DCGM_FI_DEV_ECC_SBE_VOL_TOTAL,
-        DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-
-        // =========================
-        // Throttle / Violation (핵심)
-        // =========================
-        DCGM_FI_DEV_POWER_VIOLATION,
-        DCGM_FI_DEV_THERMAL_VIOLATION,
-        DCGM_FI_DEV_SYNC_BOOST_VIOLATION,
-        DCGM_FI_DEV_BOARD_LIMIT_VIOLATION,
-        DCGM_FI_DEV_LOW_UTIL_VIOLATION,
-        DCGM_FI_DEV_RELIABILITY_VIOLATION,
-    };
     int final_count = 0;
     unsigned short *field_ids = set_field_ids(mode,basic_field_ids,sizeof(basic_field_ids)/sizeof(basic_field_ids[0]),&final_count);
     printf("mode : %hu\n",mode);

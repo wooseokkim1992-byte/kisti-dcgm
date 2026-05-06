@@ -86,7 +86,7 @@ if __name__ == "__main__":
     gpu_overhead_csv_file = "soft_max_gpu_overhead.csv".encode("utf-8")
 
     # 🔥 DCGM start
-    if lib.start_monitor_overhead(gpu_overhead_csv_file,cpu_overhead_csv_file,0) != 0:
+    if lib.start_monitor_overhead(gpu_overhead_csv_file,cpu_overhead_csv_file,1) != 0:
         raise RuntimeError("dcgm_start failed")
 
     # 🔥 multi GPU workload

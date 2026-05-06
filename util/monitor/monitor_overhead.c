@@ -29,38 +29,38 @@ static unsigned int gpu_cnts = MAX_GPUS;
 static atomic_int running = 0;
 static pthread_t collector_thread;
 
-static unsigned short group_A_field_ids[]={
-    DCGM_FI_PROF_SM_ACTIVE,
-    DCGM_FI_PROF_SM_OCCUPANCY,
-    DCGM_FI_PROF_DRAM_ACTIVE,
-    DCGM_FI_PROF_PCIE_TX_BYTES,
-    DCGM_FI_PROF_PCIE_RX_BYTES,
-    DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-    DCGM_FI_PROF_NVLINK_TX_BYTES,
-    DCGM_FI_PROF_NVLINK_RX_BYTES
-};
+// static unsigned short group_A_field_ids[]={
+//     DCGM_FI_PROF_SM_ACTIVE,
+//     DCGM_FI_PROF_SM_OCCUPANCY,
+//     DCGM_FI_PROF_DRAM_ACTIVE,
+//     DCGM_FI_PROF_PCIE_TX_BYTES,
+//     DCGM_FI_PROF_PCIE_RX_BYTES,
+//     DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+//     DCGM_FI_PROF_NVLINK_TX_BYTES,
+//     DCGM_FI_PROF_NVLINK_RX_BYTES
+// };
 
-static unsigned short group_B_field_ids[]={
-    //sub group 0
-    DCGM_FI_PROF_DRAM_ACTIVE
-};
+// static unsigned short group_B_field_ids[]={
+//     //sub group 0
+//     DCGM_FI_PROF_DRAM_ACTIVE
+// };
 
-static dcgmFieldGrp_t group_C_field_ids[]={
-    //sub group 0
-    DCGM_FI_PROF_PCIE_TX_BYTES,
-    DCGM_FI_PROF_PCIE_RX_BYTES,
-};
+// static dcgmFieldGrp_t group_C_field_ids[]={
+//     //sub group 0
+//     DCGM_FI_PROF_PCIE_TX_BYTES,
+//     DCGM_FI_PROF_PCIE_RX_BYTES,
+// };
 
-static dcgmFieldGrp_t group_D_field_ids[]={
-    //sub group 0
-    DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-};
+// static dcgmFieldGrp_t group_D_field_ids[]={
+//     //sub group 0
+//     DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+// };
 
-static dcgmFieldGrp_t group_E_field_ids[]={
-    //sub group 0
-    DCGM_FI_PROF_NVLINK_TX_BYTES,
-    DCGM_FI_PROF_NVLINK_RX_BYTES
-};
+// static dcgmFieldGrp_t group_E_field_ids[]={
+//     //sub group 0
+//     DCGM_FI_PROF_NVLINK_TX_BYTES,
+//     DCGM_FI_PROF_NVLINK_RX_BYTES
+// };
 
 unsigned short nvml_setting(){
     if(nvmlInit_v2()!=NVML_SUCCESS){
@@ -353,6 +353,13 @@ int search_supported_profile_metrics(dcgmHandle_t *handle){
 int start_monitor_overhead(const char *gpu_stat_csv_file,const char *cpu_stat_csv_file,const unsigned short mode){
     short active_gpu_cnt=0;
     unsigned int gpu_ids[DCGM_MAX_NUM_DEVICES];
+    if(mode<=0 || mode>5){
+        fprintf(stderr,"Mode Value should be between 1 and 5\n");
+        return 1;
+    }
+    int field_count=0;
+    unsigned short *field_ids = set_field_ids(mode,basic_field_ids,basic_field_size,&field_count);
+
     if(gpu_stat_csv_file==NULL||cpu_stat_csv_file==NULL){
         fprintf(stderr,"please define proper file name");
         return 1;
@@ -395,9 +402,8 @@ int start_monitor_overhead(const char *gpu_stat_csv_file,const char *cpu_stat_cs
         dcgmShutdown();
         return 1;
     }
-    const int num_of_fields = sizeof(group_A_field_ids)/sizeof(group_A_field_ids[0]);
 
-    if(dcgmFieldGroupCreate(handle,num_of_fields,group_A_field_ids,"fields",&field_group_id)!=DCGM_ST_OK){
+    if(dcgmFieldGroupCreate(handle,field_count,field_ids,"fields",&field_group_id)!=DCGM_ST_OK){
         fprintf(stderr,"failed to create field group.\n");
         dcgmGroupDestroy(handle,group_id);
         dcgmStopEmbedded(handle);

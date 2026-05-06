@@ -59,7 +59,13 @@ dkms.conf
 *.csv
 
 soft_max
+max_pool
+embedding
+batch_norm
+
+compile_commands.json
 #vscode file
 .vscode/c_cpp_properties.json
 .vscode/
 
+.clangd.yaml

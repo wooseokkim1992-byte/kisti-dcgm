@@ -1,4 +1,5 @@
 
+#include <linux/limits.h>
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -82,8 +83,9 @@ unsigned short nvml_setting(){
     return 0;
 }
 
-void nvml_cancel(FILE **fp){
-    fclose(*fp);
+void nvml_cancel(FILE **cpu_fp,FILE **gpu_fp){
+    fclose(*cpu_fp);
+    fclose(*gpu_fp);
     nvmlShutdown();
 }
 
@@ -118,22 +120,30 @@ int get_gpu_stats(
     return 0;
 }
 
-int get_gpu_stats_for_all_devices(FILE *fp){
+int initialize_gpu_csv_file(FILE **gpu_csv_file){
+    fprintf(*gpu_csv_file,"TIMESTAMP,POWER,GPU_UTIL,CLOCK,TEMPERATURE\n");
+    printf("initialize gpu csv file \n");
+    fflush(*gpu_csv_file);
+    return 0;
+}
+
+int initialize_cpu_csv_file(FILE **cpu_csv_file){
+    fprintf(*cpu_csv_file,"USER,NICE,SYSTEM,IDLE,IO-WAIT,HARDWARE-INTERRUPT,SOFTWARE-INTERRUPT,STEAL,USER_RATIO,SYS_RATIO,USAGE\n");
+    fflush(*cpu_csv_file);
+    return 0;
+}
+
+int get_gpu_stats_for_all_devices(FILE *gpu_fp){
     gpu_stat_t gpu_stat;
     long time = get_time_us();
     for(int i=0;i<gpu_cnts;i++){
         get_gpu_stats(devs[i],&gpu_stat);
-        printf( "[[POWER]:%2.f\n",gpu_stat.power_w);
-        printf( "[GPU UTIL]:%u\n",gpu_stat.gpu_util);
-        printf( "[CLOCK] : %u\n",gpu_stat.clock);
-        printf( "[TEMPERATURE] : %u\n\n",gpu_stat.temperature);
-        fprintf(fp,
-                "Time Stamp : %ld\n"
-                "[POWER]:%2.f\n"
-                "[GPU UTIL]:%u\n"
-                "[Memory UTIL]:%u\n"
-                "[CLOCK] : %u\n"
-                "[TEMPERATURE] : %u\n\n"
+        // printf( "[POWER]:%2.f\n",gpu_stat.power_w);
+        // printf( "[GPU UTIL]:%u\n",gpu_stat.gpu_util);
+        // printf( "[CLOCK] : %u\n",gpu_stat.clock);
+        // printf( "[TEMPERATURE] : %u\n\n",gpu_stat.temperature);
+        fprintf(gpu_fp,
+                "%ld,%2.f,%u,%u,%u,%u\n"
             ,time,gpu_stat.power_w,gpu_stat.gpu_util,gpu_stat.mem_util,gpu_stat.clock,gpu_stat.temperature);
     }
     return 0;
@@ -162,32 +172,6 @@ unsigned long long total_cpu(cpu_proc_stat_t *s) {
     return s->user + s->nice + s->system +
            s->idle + s->iowait +
            s->irq + s->softirq + s->steal;
-}
-
-double calc_cpu_usage(
-    cpu_proc_stat_t *prev_cpu_proc,cpu_proc_stat_t *curr_cpu_proc,
-    cpu_self_stat_t *prev_cpu_self,cpu_self_stat_t *curr_cpu_self,
-    double *user_ratio,double *system_ratio
-){
-    unsigned long long prev_total = total_cpu(prev_cpu_proc);
-    unsigned long long curr_total = total_cpu(curr_cpu_proc);
-
-    unsigned long long proc_prev = prev_cpu_self->stime+prev_cpu_self->utime;
-    unsigned long long proc_curr = curr_cpu_self->stime+curr_cpu_self->utime;
-
-    unsigned long long proc_delta = proc_curr-proc_prev;
-    unsigned long long total_delta = curr_total - prev_total;
-    if(total_delta==0){
-        return 0.0;
-    }
-    printf("proc_delta : %lld\n",proc_delta);
-    printf("total_delta : %lld\n",total_delta);
-    double usage = (double) proc_delta/total_delta;
-     // user / system 분해
-    *user_ratio   = (double)(curr_cpu_self->utime - prev_cpu_self->utime) / total_delta * 100.0;
-    *system_ratio = (double)(curr_cpu_self->stime - prev_cpu_self->stime) / total_delta * 100.0;
-
-    return usage;
 }
 
 int read_self_stat(cpu_self_stat_t *stat){
@@ -245,58 +229,102 @@ int read_cpu_proc_stat(cpu_proc_stat_t *stat){
         &stat->softirq,
         &stat->steal
     );
-    free(line);
-    
+    free(line);   
     return 0;   
 }
+
+double calc_cpu_usage(
+    cpu_proc_stat_t *prev_cpu_proc,cpu_proc_stat_t *curr_cpu_proc,
+    cpu_self_stat_t *prev_cpu_self,cpu_self_stat_t *curr_cpu_self,
+    FILE *cpu_csv
+){
+    if(cpu_csv==NULL){
+        fprintf(stderr,"File is not a proper file.\n");
+        return 0.0;
+    }
+    read_cpu_proc_stat(curr_cpu_proc);
+    read_self_stat(curr_cpu_self);
+    double usage,user_ratio,system_ratio;
+    unsigned long long prev_total = total_cpu(prev_cpu_proc);
+    unsigned long long curr_total = total_cpu(curr_cpu_proc);
+
+    unsigned long long proc_prev = prev_cpu_self->stime+prev_cpu_self->utime;
+    unsigned long long proc_curr = curr_cpu_self->stime+curr_cpu_self->utime;
+
+    unsigned long long proc_delta = proc_curr-proc_prev;
+    unsigned long long total_delta = curr_total - prev_total;
+    if(total_delta==0){
+        return 0.0;
+    }
+    usage = (double) proc_delta/total_delta;
+     // user / system 분해
+    user_ratio   = (double)(curr_cpu_self->utime - prev_cpu_self->utime) / total_delta * 100.0;
+    system_ratio = (double)(curr_cpu_self->stime - prev_cpu_self->stime) / total_delta * 100.0;
+
+    unsigned long long user_delta,nice_delta,system_delta;
+    unsigned long long idle_delta, iowait_delta;
+    unsigned long long irq_delta,softirq_delta,steal_delta;
+    user_delta = curr_cpu_proc->user-prev_cpu_proc->user;
+    nice_delta = curr_cpu_proc->nice-prev_cpu_proc->nice;
+    system_delta = curr_cpu_proc->system-prev_cpu_proc->system;
+    idle_delta = curr_cpu_proc->idle-prev_cpu_proc->idle;
+    iowait_delta = curr_cpu_proc->iowait-prev_cpu_proc->iowait;
+    irq_delta = curr_cpu_proc->irq-prev_cpu_proc->irq;
+    softirq_delta = curr_cpu_proc->softirq-prev_cpu_proc->softirq;
+    steal_delta = curr_cpu_proc->steal-prev_cpu_proc->steal;
+    fprintf(cpu_csv,
+        "%lld,%lld,%lld,%lld,%lld,"
+        "%lld,%lld,%lld,%.2f,%.2f,%.2f\n",
+        user_delta,nice_delta,system_delta,
+        idle_delta,iowait_delta,
+        irq_delta,softirq_delta,steal_delta,user_ratio,
+        system_ratio,usage
+    );
+    return usage;
+}
+
 int dcgm_collect_callback(dcgm_field_entity_group_t entity_group_id,
                      dcgm_field_eid_t entity_id,
                      dcgmFieldValue_v1 *values,
                      int num_values,void* user_data){
-    for(int i=0;i<num_values;i++){
-        if(values[i].status!=DCGM_ST_OK)continue;
-            printf("field ID: %u \n",values[i].fieldId);
-        if(values[i].fieldType==DCGM_FT_INT64){
-            printf("values : %lld\n",(long long)values[i].value.i64);
-        }else if(values[i].fieldType==DCGM_FT_DOUBLE){
-            printf("values : %2.f\n",(double)values[i].value.dbl);
-        }
-    }
     return 0;
 }
 
-void *collector(void *arg){
-    char *result_file_path = (char *)arg;
-    if(result_file_path==NULL){
-        fprintf(stderr,"argument should be initialized!");
-        return NULL;
-    }
-    printf("file name : %s\n",result_file_path);
-    FILE *fp = fopen(result_file_path,"w");
-    if(!fp){
+void *collector(void *ctx){
+    dcgm_overhead_ctx_t *c = (dcgm_overhead_ctx_t *)ctx;
+    printf("cpu csv : %s\n",c->cpu_stat_csv_file);
+    printf("gpu csv : %s\n",c->gpu_stat_csv_file);
+    
+    FILE *cpu_fp = fopen(c->cpu_stat_csv_file,"w");
+    if(cpu_fp==NULL){
         fprintf(stderr,"failed to opening file!\n");
         return NULL;
     }
+    FILE *gpu_fp = fopen(c->gpu_stat_csv_file,"w");
+    if(gpu_fp==NULL){
+        fprintf(stderr,"failed to opening file!\n");
+        fclose(cpu_fp);
+        return NULL;
+    }
+    initialize_gpu_csv_file(&gpu_fp);
+    initialize_cpu_csv_file(&cpu_fp);
     cpu_proc_stat_t curr_cpu_proc,prev_cpu_proc;
     cpu_self_stat_t curr_cpu_self,prev_cpu_self;
     read_cpu_proc_stat(&prev_cpu_proc);
     read_self_stat(&prev_cpu_self);
     while(running){
         result = dcgmGetLatestValues_v2(handle,  group_id, field_group_id,  dcgm_collect_callback,NULL);
-        read_cpu_proc_stat(&curr_cpu_proc);
-        read_self_stat(&curr_cpu_self);
-        double user_ratio=0.0;
-        double system_ratio=0.0;
-        double usage=calc_cpu_usage(&prev_cpu_proc,&curr_cpu_proc,&prev_cpu_self,&curr_cpu_self,&user_ratio, &system_ratio);
-        printf("user_ratio : %.2f\n",user_ratio);
-        printf("system_ratio : %.2f\n",system_ratio);
-        printf("usage : %.2f\n",usage);
-        get_gpu_stats_for_all_devices(fp);
-        sleep_us(1*1000*1000);//1ms
+        calc_cpu_usage(
+            &prev_cpu_proc,&curr_cpu_proc,
+            &prev_cpu_self,&curr_cpu_self,
+            cpu_fp
+        );
         prev_cpu_proc=curr_cpu_proc;
         prev_cpu_self=curr_cpu_self;
+        get_gpu_stats_for_all_devices(gpu_fp);
+        sleep_us(100*1000);//0.1ms
     }
-    nvml_cancel(&fp);
+    nvml_cancel(&cpu_fp,&gpu_fp);
     return 0;
 }
 
@@ -322,10 +350,15 @@ int search_supported_profile_metrics(dcgmHandle_t *handle){
     return 1;
 }
 
-int start_monitor_overhead(const char *result_path,const unsigned short mode){
+int start_monitor_overhead(const char *gpu_stat_csv_file,const char *cpu_stat_csv_file,const unsigned short mode){
     short active_gpu_cnt=0;
     unsigned int gpu_ids[DCGM_MAX_NUM_DEVICES];
-    printf("result_path : %s\n",result_path);
+    if(gpu_stat_csv_file==NULL||cpu_stat_csv_file==NULL){
+        fprintf(stderr,"please define proper file name");
+        return 1;
+    }
+    printf("gpu_stat_csv_file : %s\n",gpu_stat_csv_file);
+    printf("cpu_stat_csv_file : %s\n",cpu_stat_csv_file);
     printf("[MONITOR OVERHEAD] DCGM Init\n");
     if(dcgmInit()!=DCGM_ST_OK){
         fprintf(stderr,"Failed to Initialize DCGM!\n");
@@ -384,7 +417,11 @@ int start_monitor_overhead(const char *result_path,const unsigned short mode){
     }
     search_supported_profile_metrics(&handle);
     running=1;
-    pthread_create(&collector_thread,NULL,collector, (void*)result_path);
+    dcgm_overhead_ctx_t ctx;
+    memset(&ctx,0,sizeof(dcgm_overhead_ctx_t));
+    snprintf(ctx.cpu_stat_csv_file,PATH_MAX, "../../result/overhead/%s",cpu_stat_csv_file);
+    snprintf(ctx.gpu_stat_csv_file,PATH_MAX, "../../result/overhead/%s",gpu_stat_csv_file);
+    pthread_create(&collector_thread,NULL,collector, (void*)&ctx);
     return 0;
 }
 

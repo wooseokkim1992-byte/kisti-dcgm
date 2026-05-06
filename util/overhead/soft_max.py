@@ -8,7 +8,7 @@ import sys
 # ============================
 lib = ctypes.CDLL("../monitor/libmonitor.so")
 
-lib.start_monitor_overhead.argtypes = [ctypes.c_char_p, ctypes.c_ushort]
+lib.start_monitor_overhead.argtypes = [ctypes.c_char_p,ctypes.c_char_p, ctypes.c_ushort]
 lib.start_monitor_overhead.restype = ctypes.c_int
 
 lib.stop_monitor_overhead.argtypes = []
@@ -19,7 +19,7 @@ lib.stop_monitor_overhead.restype = None
 # ============================
 BATCH = 1024*4
 DIM = 8192
-ITER = 10000
+ITER = 100000
 WARMUP = 20
 
 # ============================
@@ -82,10 +82,11 @@ def run_multi_gpu_softmax():
 if __name__ == "__main__":
     print(sys.executable)
     print("=== DCGM Embed + Multi GPU Softmax ===")
-    path = "../../result/overhead/soft_max_overhead.txt".encode("utf-8")
+    cpu_overhead_csv_file = "soft_max_cpu_overhead.csv".encode("utf-8")
+    gpu_overhead_csv_file = "soft_max_gpu_overhead.csv".encode("utf-8")
 
     # 🔥 DCGM start
-    if lib.start_monitor_overhead(path,0) != 0:
+    if lib.start_monitor_overhead(gpu_overhead_csv_file,cpu_overhead_csv_file,0) != 0:
         raise RuntimeError("dcgm_start failed")
 
     # 🔥 multi GPU workload

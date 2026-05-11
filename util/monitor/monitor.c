@@ -88,71 +88,95 @@ unsigned short* set_field_ids(unsigned short mode,const unsigned short *basic_fi
     size_t basic_count = count;
     size_t additional_count = 0;
     if(mode==1){
+        //scheduler only
         static unsigned short additional_field_ids[]={
             DCGM_FI_PROF_SM_ACTIVE,
             DCGM_FI_PROF_SM_OCCUPANCY,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
             DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
         };
         additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
         new_field_ids=additional_field_ids;
     }else if(mode==2){
+        // compute Only
         static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_PIPE_FP16_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP64_ACTIVE,
             DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
         };
         additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
         new_field_ids=(unsigned short *)additional_field_ids;
     }else if(mode==3){
+        //memory_only
         static const unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
             DCGM_FI_PROF_DRAM_ACTIVE,
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode ==4){
+        //IO only
+        static const unsigned short additional_field_ids[]={
             DCGM_FI_PROF_PCIE_TX_BYTES,
             DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
             DCGM_FI_PROF_NVLINK_TX_BYTES,
             DCGM_FI_PROF_NVLINK_RX_BYTES
         };
         additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
         new_field_ids=(unsigned short *)additional_field_ids;
-    }else if(mode==4){
+    }else if(mode==5){
+        //scheduler + compute
         static const unsigned short additional_field_ids[]={
-            DCGM_FI_PROF_PIPE_FP64_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
-            DCGM_FI_PROF_PCIE_TX_BYTES,
-            DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_SM_ACTIVE,
+            DCGM_FI_PROF_SM_OCCUPANCY,
             DCGM_FI_PROF_GR_ENGINE_ACTIVE,
-            DCGM_FI_PROF_NVLINK_TX_BYTES,
-            DCGM_FI_PROF_NVLINK_RX_BYTES
-        };
-        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
-        new_field_ids=(unsigned short *)additional_field_ids;
-    }else if(mode ==5){
-        static const unsigned short additional_field_ids[]={
             DCGM_FI_PROF_PIPE_FP16_ACTIVE,
-            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP64_ACTIVE,
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode==6){
+        //scheduler + memory
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_SM_ACTIVE,
+            DCGM_FI_PROF_SM_OCCUPANCY,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
+    }else if(mode==7){
+        //scheduler + io 
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_SM_ACTIVE,
+            DCGM_FI_PROF_SM_OCCUPANCY,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
             DCGM_FI_PROF_PCIE_TX_BYTES,
             DCGM_FI_PROF_PCIE_RX_BYTES,
-            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
-            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
             DCGM_FI_PROF_NVLINK_TX_BYTES,
             DCGM_FI_PROF_NVLINK_RX_BYTES
         };
         additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
         new_field_ids=(unsigned short *)additional_field_ids;
-    }else{
-        return NULL;
+    }else if(mode==8){
+        //scheduler + compute  
+        static const unsigned short additional_field_ids[]={
+            DCGM_FI_PROF_SM_ACTIVE,
+            DCGM_FI_PROF_SM_OCCUPANCY,
+            DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+            DCGM_FI_PROF_DRAM_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP16_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP32_ACTIVE,
+            DCGM_FI_PROF_PIPE_FP64_ACTIVE,
+            DCGM_FI_PROF_PIPE_TENSOR_ACTIVE,
+            DCGM_FI_PROF_PCIE_TX_BYTES,
+            DCGM_FI_PROF_PCIE_RX_BYTES,
+            DCGM_FI_PROF_NVLINK_TX_BYTES,
+            DCGM_FI_PROF_NVLINK_RX_BYTES
+        };
+        additional_count = sizeof(additional_field_ids)/sizeof(additional_field_ids[0]);
+        new_field_ids=(unsigned short *)additional_field_ids;
     }
     size_t total = basic_count+additional_count;
     *final_count=total;

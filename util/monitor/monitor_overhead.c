@@ -71,6 +71,7 @@ unsigned short nvml_setting(){
         fprintf(stderr,"Failed to get GPU device Count!");
         return 1;
     }
+    printf("gpu cnts:%d",gpu_cnts);
     if(gpu_cnts>=MAX_GPUS){
         gpu_cnts=MAX_GPUS;
     }
@@ -121,7 +122,7 @@ int get_gpu_stats(
 }
 
 int initialize_gpu_csv_file(FILE **gpu_csv_file){
-    fprintf(*gpu_csv_file,"TIMESTAMP,POWER,GPU_UTIL,CLOCK,TEMPERATURE\n");
+    fprintf(*gpu_csv_file,"TIMESTAMP,POWER,GPU_UTIL,MEM_UTIL,CLOCK,TEMPERATURE\n");
     printf("initialize gpu csv file \n");
     fflush(*gpu_csv_file);
     return 0;
@@ -353,7 +354,7 @@ int search_supported_profile_metrics(dcgmHandle_t *handle){
 int start_monitor_overhead(const char *gpu_stat_csv_file,const char *cpu_stat_csv_file,const unsigned short mode){
     short active_gpu_cnt=0;
     unsigned int gpu_ids[DCGM_MAX_NUM_DEVICES];
-    if(mode<=0 || mode>5){
+    if(mode<=0 || mode>MAX_MODE){
         fprintf(stderr,"Mode Value should be between 1 and 5\n");
         return 1;
     }
@@ -431,4 +432,64 @@ int start_monitor_overhead(const char *gpu_stat_csv_file,const char *cpu_stat_cs
     return 0;
 }
 
+void stop_monitor_baseline(){
+    running=0;
+    void*ret_val=0;
+    pthread_join(collector_thread, &ret_val);
+    int *result = (int*)ret_val;
+    if(*result==1){
+        fprintf(stderr,"Error occurred during operating baseline");
+    }
+}
 
+void* calculate_baseline(void *ctx){
+    dcgm_overhead_ctx_t *c = (dcgm_overhead_ctx_t*)ctx;
+    unsigned short* return_value=0;
+    printf("cpu stat csv file path : %s",c->cpu_stat_csv_file);
+    printf("cpu stat csv file path : %s",c->gpu_stat_csv_file);
+    FILE *cpu_stat_csv_file=fopen(c->cpu_stat_csv_file,"w");
+    if(cpu_stat_csv_file==NULL){
+        fprintf(stderr,"failed to fopen file!");
+        *return_value=1;
+        return return_value;
+    }
+    FILE *gpu_stat_csv_file=fopen(c->gpu_stat_csv_file,"w");
+    if(gpu_stat_csv_file==NULL){
+        fprintf(stderr,"failed to fopen file!");
+        fclose(cpu_stat_csv_file);
+        *return_value=1;
+        return return_value;
+    }
+    initialize_cpu_csv_file(&cpu_stat_csv_file);
+    initialize_cpu_csv_file(&gpu_stat_csv_file);
+    cpu_proc_stat_t prev_proc_stat,curr_proc_stat;
+    cpu_self_stat_t prev_self_stat,curr_self_stat;
+    read_cpu_proc_stat(&prev_proc_stat);
+    read_self_stat(&prev_self_stat);
+    while(running){
+        calc_cpu_usage(&prev_proc_stat, &curr_proc_stat, 
+            &prev_self_stat, &curr_self_stat, 
+            cpu_stat_csv_file
+        );
+        prev_proc_stat=curr_proc_stat;
+        prev_self_stat=curr_self_stat;
+        get_gpu_stats_for_all_devices(gpu_stat_csv_file);
+        sleep_us(100*1000);
+    }
+    nvml_cancel(&cpu_stat_csv_file,&gpu_stat_csv_file);
+
+    return return_value;
+}
+
+int start_monitor_baseline(const char *gpu_stat_csv_file,const char *cpu_stat_csv_file){
+    if(nvml_setting()!=0){
+        return 1;
+    }
+    dcgm_overhead_ctx_t ctx;
+    memset(&ctx,0,sizeof(dcgm_overhead_ctx_t));
+    snprintf(ctx.cpu_stat_csv_file,PATH_MAX, "../../result/overhead/%s",gpu_stat_csv_file);
+    snprintf(ctx.gpu_stat_csv_file,PATH_MAX, "../../result/overhead/%s",cpu_stat_csv_file);
+    running=1;
+    pthread_create(&collector_thread, NULL,calculate_baseline, (void*)&ctx);
+    return 0;   
+}

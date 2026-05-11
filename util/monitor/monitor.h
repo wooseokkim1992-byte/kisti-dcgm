@@ -12,7 +12,7 @@ extern "C"{
 	#define MAX_GPUS 16
 	#define MAX_FIELDS 16
 	#define MAX_BUF 256
-	
+	#define MAX_MODE 12
 	extern const unsigned short basic_field_ids[];
 	extern size_t basic_field_size;
 	typedef struct {
@@ -128,6 +128,8 @@ extern "C"{
 	int start_monitor_overhead(const char *gpu_stat_csv_file,const char *cpu_stat_csv_file,const unsigned short mode);
 	void stop_monitor_overhead(void);
 	unsigned short* set_field_ids(unsigned short mode,const unsigned short*basic_field_ids,size_t count,int *final_count);
+	int start_monitor_baseline(const char *gpu_stat_csv_file,const char *cpu_stat_csv_file);
+	void stop_monitor_baseline();
 #ifdef __cplusplus
 }
 #endif

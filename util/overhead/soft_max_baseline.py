@@ -8,11 +8,11 @@ import sys
 # ============================
 lib = ctypes.CDLL("../monitor/libmonitor.so")
 
-lib.start_monitor_overhead.argtypes = [ctypes.c_char_p,ctypes.c_char_p, ctypes.c_ushort]
-lib.start_monitor_overhead.restype = ctypes.c_int
+lib.start_monitor_baseline.argtypes = [ctypes.c_char_p,ctypes.c_char_p]
+lib.start_monitor_baseline.restype = ctypes.c_int
 
-lib.stop_monitor_overhead.argtypes = []
-lib.stop_monitor_overhead.restype = None
+lib.stop_monitor_baseline.argtypes = []
+lib.stop_monitor_baseline.restype = None
 
 # ============================
 # config
@@ -79,22 +79,20 @@ def run_multi_gpu_softmax():
 # ============================
 # main
 # ============================
+
 if __name__ == "__main__":
-    if len(sys.argv) !=4:
-        print("Usage python soft_max.py <mode number> <cpu_csv_filename> <gpu_csv_filename>")
+    if len(sys.argv)!=3:
+        print("Usage python soft_max.py <cpu_csv_filename> <gpu_csv_filename>")
         sys.exit()
-    
     print(sys.executable)
     print("=== DCGM Embed + Multi GPU Softmax ===")
-    cpu_overhead_csv_file = sys.argv[2].encode("utf-8")
-    gpu_overhead_csv_file = sys.argv[3].encode("utf-8")
-    mode = int(sys.argv[1])
-    # DCGM start
-    if lib.start_monitor_overhead(gpu_overhead_csv_file,cpu_overhead_csv_file,mode) != 0:
-        raise RuntimeError("dcgm_start failed")
+    cpu_overhead_csv_file = sys.argv[1].encode("utf-8")
+    gpu_overhead_csv_file = sys.argv[2].encode("utf-8")
 
-    # multi GPU workload
+    if lib.start_monitor_baseline(gpu_overhead_csv_file,cpu_overhead_csv_file) != 0:
+        raise RuntimeError("monitoring baseline failed")
+    
+    # 🔥 multi GPU workload
     run_multi_gpu_softmax()
 
-    # DCGM stop
-    lib.stop_monitor_overhead()
+    lib.stop_monitor_baseline()
